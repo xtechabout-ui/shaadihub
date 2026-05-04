@@ -1,0 +1,376 @@
+You are a senior full-stack engineer. Build a complete production-ready multi-vendor Wedding Marketplace called ShaadiHub. This is for Karachi, Pakistan.
+
+TECH STACK:
+- Backend: Python FastAPI + PostgreSQL + SQLAlchemy ORM + Pydantic v2 + JWT Auth + bcrypt + Cloudinary
+- Frontend: React.js (Vite) + Tailwind CSS + React Router v6 + Axios
+- Deploy-ready: Vercel (frontend) + Render (backend)
+
+==================================================
+DATABASE SCHEMA (PostgreSQL)
+==================================================
+
+Create ALL these tables with proper relationships:
+
+1. users: id, name, email, password_hash, role(user/vendor/admin), phone, avatar_url, is_active, is_blocked, created_at
+2. vendors: id, user_id(FK), category, title, description, location, area, city, latitude, longitude, price_range_min, price_range_max, capacity, whatsapp, cover_image_url, verified, is_featured, is_suspended, rating, total_reviews, profile_views, created_at
+3. vendor_images: id, vendor_id(FK), image_url, public_id
+4. packages: id, vendor_id(FK), name, description, price, features(JSON text), is_popular
+5. reviews: id, vendor_id(FK), user_id(FK), rating, comment, created_at
+6. bookings: id, vendor_id(FK), user_id(FK), package_id(FK nullable), event_date, guest_count, notes, status(pending/approved/rejected/cancelled), created_at
+7. favorites: id, user_id(FK), vendor_id(FK), created_at [UNIQUE user_id+vendor_id]
+8. subscriptions: id, vendor_id(FK unique), plan(free/premium), start_date, end_date
+
+==================================================
+BACKEND FOLDER STRUCTURE
+==================================================
+
+backend/
+  main.py
+  database.py
+  .env.example
+  requirements.txt
+  models/
+    __init__.py
+    user.py
+    vendor.py
+    review.py
+    booking.py
+    favorite.py
+    subscription.py
+  schemas/
+    __init__.py
+    user.py
+    vendor.py
+    review.py
+  routers/
+    __init__.py
+    auth.py
+    vendors.py
+    users.py
+    admin.py
+    bookings.py
+  auth/
+    __init__.py
+    jwt.py
+    dependencies.py
+  utils/
+    __init__.py
+    cloudinary_helper.py
+
+==================================================
+BACKEND APIs TO BUILD
+==================================================
+
+AUTH ROUTER (/auth):
+POST /auth/register — register user or vendor (role in body), auto-create vendor profile if role=vendor
+POST /auth/login — login, return JWT token + user data
+
+VENDORS ROUTER (/vendors):
+GET /vendors — list with filters: category, area, city, min_price, max_price, min_rating, capacity, search, featured, page, limit. Return: {total, page, pages, vendors[]}
+GET /vendors/me/profile — get logged-in vendor's profile [vendor only]
+GET /vendors/{id} — get vendor detail + increment profile_views
+POST /vendors — create vendor listing [vendor only]
+PUT /vendors/{id} — update vendor listing [owner only]
+POST /vendors/{id}/images — upload image via Cloudinary multipart [owner only]
+DELETE /vendors/{id}/images/{image_id} — delete image [owner only]
+POST /vendors/{id}/packages — add pricing package [owner only]
+PUT /vendors/{id}/packages/{pkg_id} — update package [owner only]
+DELETE /vendors/{id}/packages/{pkg_id} — delete package [owner only]
+
+USERS ROUTER (/users):
+GET /users/me — get current user profile
+PUT /users/me — update name, phone, avatar_url
+POST /users/favorites/{vendor_id} — toggle favorite (add if not exists, remove if exists). Return {favorited: bool}
+GET /users/favorites — get all favorited vendors
+POST /users/bookings — create booking request {vendor_id, package_id, event_date, guest_count, notes}
+GET /users/bookings — get user's bookings
+GET /users/reviews/{vendor_id} — get reviews for vendor (public)
+POST /users/reviews/{vendor_id} — add review {rating, comment} [user only, once per vendor]
+  — also auto-calculate and update vendor.rating and vendor.total_reviews
+
+BOOKINGS ROUTER (/bookings):
+GET /bookings/vendor — get all bookings for logged-in vendor [vendor only]
+PUT /bookings/{id}/status?status=approved|rejected|cancelled — update status [vendor only]
+
+ADMIN ROUTER (/admin):
+GET /admin/stats — return {total_users, total_vendors, verified_vendors, pending_vendors, total_bookings, total_reviews}
+GET /admin/vendors — list all vendors
+PUT /admin/vendors/{id}/approve — set verified=True
+PUT /admin/vendors/{id}/suspend — toggle is_suspended
+PUT /admin/vendors/{id}/feature — toggle is_featured
+DELETE /admin/vendors/{id} — delete vendor + cascade
+GET /admin/users — list all users
+PUT /admin/users/{id}/block — toggle is_blocked
+
+==================================================
+AUTH SYSTEM
+==================================================
+
+- JWT tokens with HS256, expiry from env
+- bcrypt password hashing
+- 3 dependency functions: get_current_user, require_vendor (role=vendor or admin), require_admin (role=admin)
+- Block check: blocked users get 401
+- Suspended vendors still authenticate but their listings hidden from public
+
+==================================================
+FRONTEND FOLDER STRUCTURE
+==================================================
+
+frontend/
+  index.html
+  vite.config.js
+  tailwind.config.js
+  postcss.config.js
+  vercel.json  — {"rewrites": [{"source": "/(.*)", "destination": "/"}]}
+  package.json
+  .env.example — VITE_API_URL=http://localhost:8000
+  src/
+    main.jsx
+    App.jsx
+    index.css
+    context/
+      AuthContext.jsx — user state, login(), register(), logout()
+    services/
+      api.js — axios instance with JWT interceptor + authAPI, vendorAPI, userAPI, bookingAPI, adminAPI
+    layouts/
+      MainLayout.jsx — Navbar + Outlet + Footer
+      ProtectedRoute.jsx — redirect if not logged in or wrong role
+    components/
+      common/
+        Navbar.jsx
+        Footer.jsx
+        VendorCard.jsx
+        LoadingSpinner.jsx
+        StarRating.jsx
+    pages/
+      Home.jsx
+      VendorListing.jsx
+      VendorProfile.jsx
+      Login.jsx
+      Register.jsx
+      UserDashboard.jsx
+      VendorDashboard.jsx
+      AdminPanel.jsx
+
+==================================================
+FRONTEND PAGES — DETAILED REQUIREMENTS
+==================================================
+
+HOME PAGE (Home.jsx):
+- Navbar with ShaadiHub logo (heart icon), links, login/register or user dropdown
+- Hero: big heading, search bar → navigates to /vendors?search=...
+- Stats row: 2500+ couples, 400+ vendors, 20+ areas, 4.8/5 rating
+- Category grid: 8 categories with emoji icons, each links to /vendors?category=...
+  Categories: Marriage Hall, Catering, Photography, Videography, Decoration, Car Rental, Event Planner, Makeup & Beauty
+- Featured vendors section: fetch vendors?featured=true&limit=6, show VendorCard grid
+- Why ShaadiHub: 3 feature blocks (Verified, Real Reviews, Instant Booking)
+- CTA banner: gradient rose bg, Get Started + Browse Vendors buttons
+- Footer with links
+
+VENDOR LISTING PAGE (VendorListing.jsx):
+- Sticky search bar at top
+- Sidebar filters (collapsible on mobile):
+  - Category (radio buttons for all 8 categories)
+  - Area (dropdown with Karachi areas: Clifton, DHA, Gulshan, North Nazimabad, Saddar, Korangi, Malir, Bahria Town, Scheme 33, PECHS)
+  - Price range (min/max number inputs)
+  - Minimum rating (4, 4.5, 5 radio buttons)
+  - Clear all button
+- Vendor grid: 3 columns desktop, 2 tablet, 1 mobile
+- Pagination: prev/next with current page / total pages
+
+VENDOR CARD (VendorCard.jsx):
+- Cover image with aspect-ratio 4:3, fallback emoji 💒
+- Featured badge (rose), Verified badge (green)
+- Category pill on image
+- Heart button (toggles favorite via API)
+- Title, location, area
+- Rating stars + count
+- Capacity
+- Price range
+- "View Details →" link
+
+VENDOR PROFILE PAGE (VendorProfile.jsx):
+- Full-width image gallery with prev/next arrows and dot indicators
+- Breadcrumb
+- Title with category, Verified badge, Top Rated badge
+- Rating, location, capacity info row
+- Description
+- Pricing Packages section: 3 cards, most popular highlighted in rose
+  - Each package: name, price in PKR, description, feature list (parsed from JSON), Select Package button
+- Location section: Google Maps embed iframe (if lat/lng available)
+- Reviews section:
+  - Average rating display
+  - Write a Review button (only for role=user)
+  - Review list: avatar initial, name, star rating, comment, date
+- Sticky sidebar:
+  - Starting price
+  - Book Now button → opens modal
+  - WhatsApp Inquiry button (only if whatsapp set)
+  - Trust signals: Verified, Secure Booking, Free Cancellation
+
+BOOKING MODAL:
+- Event date picker
+- Guest count
+- Notes textarea
+- Confirm button (calls POST /users/bookings)
+
+REVIEW MODAL:
+- Star rating selector (click to set)
+- Comment textarea
+- Submit button (calls POST /users/reviews/{id})
+
+USER DASHBOARD (UserDashboard.jsx):
+- Sidebar tabs: Overview, Favorites, Bookings, Checklist
+- Overview: 3 stat cards (saved vendors, bookings, checklist progress) + recent bookings list
+- Favorites tab: grid of favorited vendors with remove button
+- Bookings tab: list with event date, status badge (pending=amber, approved=green, rejected=red)
+- Checklist tab: 10 wedding tasks, checkboxes, progress bar, saved to localStorage
+
+VENDOR DASHBOARD (VendorDashboard.jsx):
+- Sidebar tabs: Overview, Profile, Portfolio, Packages, Bookings, Reviews
+- Overview: 4 stat cards (profile views, total bookings, reviews, rating) + recent bookings table with approve/reject buttons + Upgrade to Premium CTA card
+- Profile tab: display all vendor fields, Edit button switches to editable inputs, Save button calls PUT /vendors/{id}
+- Portfolio tab: grid of uploaded images with delete button, Upload Photo button (file input → POST /vendors/{id}/images)
+- Packages tab: list packages with edit/delete, Add Package button opens modal
+  - Package modal: name, price, description, features (textarea one per line), is_popular checkbox
+- Bookings tab: full list with approve/reject buttons for pending bookings
+- Reviews tab: list all reviews with user name, stars, comment, date
+
+ADMIN PANEL (AdminPanel.jsx):
+- Sidebar tabs: Statistics, Vendors, Users
+- Stats tab: 6 metric cards
+- Vendors tab: table with columns: Vendor name, Category, Rating, Status badges, Actions
+  - Actions: Approve (if not verified), Feature toggle, Suspend toggle, Delete
+- Users tab: table with Name, Email, Role badge, Status, Joined date, Block/Unblock button
+
+==================================================
+UI DESIGN SYSTEM
+==================================================
+
+Color scheme: Rose/Pink primary (#f43f5e), Emerald for success, Amber for warnings
+- All cards: rounded-2xl, shadow-sm, border border-gray-100
+- Buttons: rose-500 primary, emerald-500 success, hover states
+- Badges: rounded-full px-3 py-1 text-xs font-semibold
+- Form inputs: border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-rose-300
+- Modals: fixed inset-0 bg-black/50 z-50, white card max-w-md
+- Loading: border-t-rose-500 animate-spin
+- Fully responsive: mobile-first, hamburger menu on mobile
+
+==================================================
+ROUTING (App.jsx)
+==================================================
+
+Public: / , /vendors, /vendors/:id, /login, /register
+Protected (any role): /dashboard [UserDashboard]
+Protected (vendor/admin): /vendor/dashboard [VendorDashboard]
+Protected (admin only): /admin [AdminPanel]
+
+ProtectedRoute checks: if no user → redirect /login; if wrong role → redirect /
+
+==================================================
+ENVIRONMENT VARIABLES
+==================================================
+
+Backend .env:
+DATABASE_URL=postgresql://user:password@localhost:5432/shaadihub
+SECRET_KEY=your-super-secret-key-min-32-chars
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+CLOUDINARY_CLOUD_NAME=xxx
+CLOUDINARY_API_KEY=xxx
+CLOUDINARY_API_SECRET=xxx
+FRONTEND_URL=http://localhost:5173
+
+Frontend .env:
+VITE_API_URL=http://localhost:8000
+
+==================================================
+DEPLOYMENT CONFIG
+==================================================
+
+Backend render.yaml:
+services:
+  - type: web
+    name: shaadihub-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+Frontend vercel.json:
+{"rewrites": [{"source": "/(.*)", "destination": "/"}]}
+
+==================================================
+IMPORTANT IMPLEMENTATION NOTES
+==================================================
+
+1. Tables auto-create on startup via Base.metadata.create_all(bind=engine)
+2. CORS: allow origins from FRONTEND_URL env + localhost:5173
+3. Password hashing: always bcrypt, never store plaintext
+4. JWT: include user id (as string "sub") and role in payload
+5. Rating calculation: when new review added, recalculate average of ALL reviews for that vendor
+6. Vendor profile_views: increment by 1 on each GET /vendors/{id}
+7. Image upload: use multipart/form-data, upload to Cloudinary, store secure_url + public_id
+8. Cover image: set vendor.cover_image_url to first uploaded image if not set
+9. Features column in packages: store as JSON string e.g. '["Full day coverage", "2 photographers"]'
+10. Favorite toggle: if exists delete it, if not create it. Return {favorited: bool}
+11. Frontend API service: axios interceptor auto-attaches Bearer token from localStorage
+12. On 401 response: clear localStorage and redirect to /login
+13. Admin promotion: do via SQL: UPDATE users SET role='admin' WHERE email='...'
+14. All money values in PKR (Pakistani Rupees)
+15. Default city: Karachi
+
+==================================================
+REQUIREMENTS.TXT
+==================================================
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+pydantic==2.7.3
+pydantic-settings==2.3.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+cloudinary==1.40.0
+python-dotenv==1.0.1
+email-validator==2.1.1
+
+==================================================
+PACKAGE.JSON DEPENDENCIES
+==================================================
+
+"react": "^18.3.1"
+"react-dom": "^18.3.1"
+"react-router-dom": "^6.24.0"
+"axios": "^1.7.2"
+"lucide-react": "^0.395.0"
+"tailwindcss": "^3.4.4"
+"@vitejs/plugin-react": "^4.3.1"
+"vite": "^5.3.1"
+
+==================================================
+DELIVERABLES
+==================================================
+
+Generate in this order:
+1. backend/requirements.txt
+2. backend/.env.example
+3. backend/database.py
+4. backend/models/ (all 6 files)
+5. backend/schemas/ (all files)
+6. backend/auth/ (jwt.py + dependencies.py)
+7. backend/utils/cloudinary_helper.py
+8. backend/routers/ (all 5 routers)
+9. backend/main.py
+10. frontend/package.json + vite.config.js + tailwind.config.js + postcss.config.js + vercel.json
+11. frontend/src/index.css + main.jsx
+12. frontend/src/context/AuthContext.jsx
+13. frontend/src/services/api.js
+14. frontend/src/components/common/ (all 5 components)
+15. frontend/src/layouts/ (MainLayout.jsx + ProtectedRoute.jsx)
+16. frontend/src/pages/ (all 8 pages)
+17. frontend/src/App.jsx
+18. README.md with setup instructions
+
+Generate COMPLETE files only. No placeholder comments like "add your code here". Every file must be fully working code.

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "ShaadiHub"
+version = "1.0.0"
+id = "artifacts/shaadihub"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21065
+
+[services.development]
+run = "pnpm --filter @workspace/shaadihub run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/shaadihub", "run", "build" ]
+publicDir = "artifacts/shaadihub/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21065"
+BASE_PATH = "/"
